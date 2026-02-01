@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">Vocab Levels</div>
+    <nav>
+      <span>Xin chào, <strong data-auth-status>Guest</strong></span>
+      <a href="/index.html">Học từ mới</a>
+      <a href="/quiz.html">Làm quiz</a>
+      <a href="/leaderboard.html">Leaderboard</a>
+      <a href="/admin.html" data-admin-link style="display:none">Admin</a>
+      <a href="/register.html" data-register-link>Register</a>
+      <a href="/login.html" data-login-link>Login</a>
+      <button class="btn secondary" data-logout style="display:none">Logout</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1>Đăng nhập</h1>
+      <p>Đăng nhập để lưu tiến độ và làm quiz.</p>
+    </section>
+
+    <form class="form" id="login-form">
+      <input type="text" name="username" placeholder="Username" required />
+      <input type="password" name="password" placeholder="Password" required />
+      <button class="btn" type="submit">Login</button>
+    </form>
+    <div class="notice" id="notice"></div>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script>
+    App.renderHeader();
+    const form = document.getElementById('login-form');
+    const notice = document.getElementById('notice');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = Object.fromEntries(new FormData(form));
+      try {
+        const data = await App.apiFetch('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        App.setToken(data.token);
+        App.setUserInfo({ username: data.username, role: data.role });
+        notice.textContent = 'Đăng nhập thành công';
+        setTimeout(() => { window.location.href = '/index.html'; }, 600);
+      } catch (err) {
+        notice.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Vocab</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">Vocab Levels</div>
+    <nav>
+      <span>Xin chào, <strong data-auth-status>Guest</strong></span>
+      <a href="/index.html">Học từ mới</a>
+      <a href="/quiz.html">Làm quiz</a>
+      <a href="/leaderboard.html">Leaderboard</a>
+      <a href="/admin.html" data-admin-link style="display:none">Admin</a>
+      <a href="/login.html" data-login-link>Login</a>
+      <a href="/register.html" data-register-link>Register</a>
+      <button class="btn secondary" data-logout style="display:none">Logout</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1>Admin · Quản lý từ vựng</h1>
+      <p>Thêm / sửa / xoá từ vựng. Dữ liệu hiển thị theo alphabet.</p>
+    </section>
+
+    <form class="form" id="vocab-form">
+      <input type="hidden" name="id" />
+      <input type="text" name="word" placeholder="Từ tiếng Anh" required />
+      <input type="text" name="meaning" placeholder="Nghĩa tiếng Việt" required />
+      <input type="text" name="example" placeholder="Ví dụ (tuỳ chọn)" />
+      <select name="level" required>
+        <option value="A1">A1</option>
+        <option value="A2">A2</option>
+        <option value="B1">B1</option>
+        <option value="B2">B2</option>
+        <option value="C1">C1</option>
+      </select>
+      <button class="btn" type="submit">Lưu</button>
+      <button class="btn secondary" type="button" id="reset-btn">Reset</button>
+    </form>
+
+    <div style="margin-top:16px;">
+      <label>Filter level:
+        <select id="filter-level">
+          <option value="A1">A1</option>
+          <option value="A2">A2</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+          <option value="C1">C1</option>
+        </select>
+      </label>
+      <button class="btn" id="reload-btn">Tải</button>
+    </div>
+
+    <table class="table" id="admin-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Từ</th>
+          <th>Nghĩa</th>
+          <th>Level</th>
+          <th>Hành động</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <section class="hero" style="margin-top:28px;">
+      <h1>Admin · Nhập hàng loạt</h1>
+      <p>Dán nhiều dòng theo định dạng: <strong>word | meaning | example | level</strong> (example có thể bỏ trống).</p>
+    </section>
+
+    <div class="form" style="max-width:720px;">
+      <select id="bulk-default-level">
+        <option value="">Level trong từng dòng</option>
+        <option value="A1">A1</option>
+        <option value="A2">A2</option>
+        <option value="B1">B1</option>
+        <option value="B2">B2</option>
+        <option value="C1">C1</option>
+      </select>
+      <textarea id="bulk-text" rows="10" placeholder="apple | quả táo | I eat an apple. | A1"></textarea>
+      <button class="btn" id="bulk-import">Import</button>
+      <div class="notice" id="bulk-result"></div>
+    </div>
+
+    <section class="hero" style="margin-top:28px;">
+      <h1>Admin · Quản lý user</h1>
+      <p>Khoá / mở khoá / xoá tài khoản.</p>
+    </section>
+
+    <table class="table" id="user-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Locked</th>
+          <th>Hành động</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script>
+    if (!App.requireAuth() || !App.requireAdmin()) {
+      throw new Error('Admin required');
+    }
+    App.renderHeader();
+    const form = document.getElementById('vocab-form');
+    const resetBtn = document.getElementById('reset-btn');
+    const filterLevel = document.getElementById('filter-level');
+    const reloadBtn = document.getElementById('reload-btn');
+    const tableBody = document.querySelector('#admin-table tbody');
+    const userBody = document.querySelector('#user-table tbody');
+    const bulkText = document.getElementById('bulk-text');
+    const bulkBtn = document.getElementById('bulk-import');
+    const bulkResult = document.getElementById('bulk-result');
+    const bulkDefaultLevel = document.getElementById('bulk-default-level');
+
+    function getFormData() {
+      const data = Object.fromEntries(new FormData(form));
+      return {
+        id: data.id ? Number(data.id) : null,
+        word: data.word,
+        meaning: data.meaning,
+        example: data.example,
+        level: data.level
+      };
+    }
+
+    function fillForm(item) {
+      form.id.value = item.id;
+      form.word.value = item.word;
+      form.meaning.value = item.meaning;
+      form.example.value = item.example || '';
+      form.level.value = item.level;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetForm() {
+      form.reset();
+      form.id.value = '';
+    }
+
+    async function loadVocab() {
+      const level = filterLevel.value;
+      const data = await App.apiFetch(`/vocab?level=${level}`, {
+        headers: App.authHeaders()
+      });
+      tableBody.innerHTML = data.map((item) => `
+        <tr>
+          <td>${item.id}</td>
+          <td>${item.word}</td>
+          <td>${item.meaning}</td>
+          <td>${item.level}</td>
+          <td>
+            <button class="btn secondary" data-edit="${item.id}">Sửa</button>
+            <button class="btn" data-delete="${item.id}">Xoá</button>
+          </td>
+        </tr>
+      `).join('');
+
+      tableBody.querySelectorAll('[data-edit]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = Number(btn.getAttribute('data-edit'));
+          const item = data.find((row) => row.id === id);
+          if (item) fillForm(item);
+        });
+      });
+
+      tableBody.querySelectorAll('[data-delete]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = Number(btn.getAttribute('data-delete'));
+          if (!confirm('Xoá từ này?')) return;
+          await App.apiFetch(`/admin/vocab/${id}`, {
+            method: 'DELETE',
+            headers: App.authHeaders()
+          });
+          loadVocab();
+        });
+      });
+    }
+
+    async function loadUsers() {
+      const users = await App.apiFetch('/admin/users', {
+        headers: App.authHeaders()
+      });
+      userBody.innerHTML = users.map((u) => `
+        <tr>
+          <td>${u.id}</td>
+          <td>${u.username}</td>
+          <td>${u.role}</td>
+          <td>${u.is_locked ? 'Yes' : 'No'}</td>
+          <td>
+            <button class="btn secondary" data-lock="${u.id}" data-locked="${u.is_locked}">
+              ${u.is_locked ? 'Mở khoá' : 'Khoá'}
+            </button>
+            <button class="btn" data-delete-user="${u.id}">Xoá</button>
+          </td>
+        </tr>
+      `).join('');
+
+      userBody.querySelectorAll('[data-lock]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = Number(btn.getAttribute('data-lock'));
+          const locked = btn.getAttribute('data-locked') === '1';
+          await App.apiFetch(`/admin/users/${id}/lock`, {
+            method: 'PATCH',
+            headers: App.authHeaders(),
+            body: JSON.stringify({ isLocked: !locked })
+          });
+          loadUsers();
+        });
+      });
+
+      userBody.querySelectorAll('[data-delete-user]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = Number(btn.getAttribute('data-delete-user'));
+          if (!confirm('Xoá tài khoản này?')) return;
+          await App.apiFetch(`/admin/users/${id}`, {
+            method: 'DELETE',
+            headers: App.authHeaders()
+          });
+          loadUsers();
+        });
+      });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = getFormData();
+      const method = data.id ? 'PUT' : 'POST';
+      const url = data.id ? `/admin/vocab/${data.id}` : '/admin/vocab';
+      await App.apiFetch(url, {
+        method,
+        headers: App.authHeaders(),
+        body: JSON.stringify(data)
+      });
+      resetForm();
+      loadVocab();
+    });
+
+    resetBtn.addEventListener('click', resetForm);
+    reloadBtn.addEventListener('click', loadVocab);
+    loadVocab();
+    loadUsers();
+
+    bulkBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const lines = bulkText.value.split(/\n/).map((l) => l.trim()).filter(Boolean);
+      const defLevel = bulkDefaultLevel.value;
+      const items = lines.map((line) => {
+        const parts = line.split('|').map((p) => p.trim());
+        const [word, meaning, example, level] = parts;
+        return {
+          word,
+          meaning,
+          example: example || null,
+          level: level || defLevel
+        };
+      });
+      if (!items.length) {
+        bulkResult.textContent = 'Không có dữ liệu để import.';
+        return;
+      }
+      try {
+        const data = await App.apiFetch('/admin/vocab/bulk', {
+          method: 'POST',
+          headers: App.authHeaders(),
+          body: JSON.stringify({ items })
+        });
+        bulkResult.textContent = `Import xong: inserted ${data.inserted}, skipped ${data.skipped}.`;
+        bulkText.value = '';
+        loadVocab();
+      } catch (err) {
+        bulkResult.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

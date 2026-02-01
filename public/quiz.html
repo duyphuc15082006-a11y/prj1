@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quiz</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">Vocab Levels</div>
+    <nav>
+      <span>Xin chào, <strong data-auth-status>Guest</strong></span>
+      <a href="/index.html">Học từ mới</a>
+      <a href="/quiz.html">Làm quiz</a>
+      <a href="/leaderboard.html">Leaderboard</a>
+      <a href="/admin.html" data-admin-link style="display:none">Admin</a>
+      <a href="/login.html" data-login-link>Login</a>
+      <a href="/register.html" data-register-link>Register</a>
+      <button class="btn secondary" data-logout style="display:none">Logout</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1>Quiz</h1>
+      <p>Chọn đáp án đúng cho từng từ vựng.</p>
+    </section>
+
+    <div style="margin-bottom:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <label>Level:
+        <select id="level-select">
+          <option value="A1">A1</option>
+          <option value="A2">A2</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+          <option value="C1">C1</option>
+        </select>
+      </label>
+      <label>Kiểu quiz:
+        <select id="type-select">
+          <option value="mcq">Chọn 1/4 đáp án</option>
+          <option value="en_vi">EN → VI (điền nghĩa)</option>
+          <option value="vi_en">VI → EN (điền từ)</option>
+        </select>
+      </label>
+      <label>Số câu: <input id="quiz-count" type="number" min="1" max="50" value="10" /></label>
+      <button class="btn" id="btn-start">Bắt đầu</button>
+    </div>
+
+    <form id="quiz-form"></form>
+    <div class="notice" id="result"></div>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script>
+    if (!App.requireAuth()) {
+      throw new Error('Auth required');
+    }
+    App.renderHeader();
+    const levelFromQuery = App.getQueryParam('level');
+    const quizForm = document.getElementById('quiz-form');
+    const result = document.getElementById('result');
+    const btnStart = document.getElementById('btn-start');
+    const levelSelect = document.getElementById('level-select');
+    const typeSelect = document.getElementById('type-select');
+
+    if (levelFromQuery) {
+      levelSelect.value = levelFromQuery;
+    }
+
+    async function startQuiz() {
+      const level = levelSelect.value;
+      const type = typeSelect.value;
+      const n = Number(document.getElementById('quiz-count').value || 10);
+      result.textContent = '';
+      quizForm.innerHTML = '';
+      try {
+        const data = await App.apiFetch('/quiz/start', {
+          method: 'POST',
+          headers: App.authHeaders(),
+          body: JSON.stringify({ level, n, type })
+        });
+
+        quizForm.innerHTML = data.questions.map((q, idx) => {
+          const choices = (q.choices || []).map((choice) => `
+            <label class="choice">
+              <input type="radio" name="q${idx}" value="${choice}" required /> ${choice}
+            </label>
+          `).join('');
+          const inputBox = !q.choices ? `
+            <input type="text" name="q${idx}" required placeholder="Nhập câu trả lời" style="padding:8px 10px; width:100%; margin-top:6px;" />
+          ` : '';
+          return `
+            <div class="quiz-card" data-id="${q.id}">
+              <strong>${idx + 1}. ${q.prompt}</strong>
+              <div style="color:#6f6559; margin:6px 0;">${q.example || ''}</div>
+              ${choices || inputBox}
+            </div>
+          `;
+        }).join('');
+
+        const submitBtn = document.createElement('button');
+        submitBtn.type = 'submit';
+        submitBtn.className = 'btn';
+        submitBtn.textContent = 'Nộp bài';
+        quizForm.appendChild(submitBtn);
+      } catch (err) {
+        result.textContent = err.message;
+      }
+    }
+
+    quizForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const level = levelSelect.value;
+      const type = typeSelect.value;
+      const answers = Array.from(document.querySelectorAll('.quiz-card')).map((card, idx) => {
+        const vocabId = Number(card.getAttribute('data-id'));
+        const selected = quizForm.querySelector(`input[name=\"q${idx}\"]:checked`);
+        const textInput = quizForm.querySelector(`input[name=\"q${idx}\"]`);
+        const answer = selected ? selected.value : textInput.value;
+        return { vocabId, answer };
+      });
+      try {
+        const data = await App.apiFetch('/quiz/submit', {
+          method: 'POST',
+          headers: App.authHeaders(),
+          body: JSON.stringify({ level, type, answers })
+        });
+        result.textContent = `Điểm: ${data.score}/${data.total}`;
+      } catch (err) {
+        result.textContent = err.message;
+      }
+    });
+
+    btnStart.addEventListener('click', startQuiz);
+  </script>
+</body>
+</html>
